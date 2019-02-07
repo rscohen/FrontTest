@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 import pickle
 import trimesh as tr
 
-target_mesh = read_mesh_file('3d_model/Motor.stl')
+target_mesh = read_mesh_file('../3d_model/Motor.stl')
 target_mesh.compute_vertex_normals()
 
 tr_target_mesh = pn_mesh2tr_mesh(target_mesh)
