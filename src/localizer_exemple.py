@@ -1,13 +1,8 @@
 import open3d as pn
 import numpy as np
-from util import mesh2pcl, pn_mesh2pym_mesh , pym_mesh2pn_mesh
-import pymesh as pym
 from fileIO import read_mesh_file
-from util import pn_mesh2tr_mesh, tr_mesh2pn_mesh,fragment_pcl
+from util import pn_mesh2tr_mesh, tr_mesh2pn_mesh
 from camera_simulation import camera
-import copy
-import time
-
 
 #%% CREATE TARGET MODEL
 target_mesh = read_mesh_file('../3d_model/Motor.stl')
