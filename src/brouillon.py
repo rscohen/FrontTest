@@ -8,7 +8,7 @@ from camera_simulation import camera
 import copy
 import time
 
-target_mesh = read_mesh_file('3d_model/Motor.stl')
+target_mesh = read_mesh_file('../3d_model/Motor.stl')
 #%%
 tr_target_mesh = pn_mesh2tr_mesh(target_mesh)
 mesh_1, mesh_2 = tr_target_mesh.split()[[2,8]]
