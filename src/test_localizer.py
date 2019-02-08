@@ -4,16 +4,16 @@ This script is testint the localizer class
 
 import open3d as pn
 import numpy as np
-from util import mesh2pcl, pn_mesh2pym_mesh , pym_mesh2pn_mesh
+from src.util import mesh2pcl, pn_mesh2pym_mesh , pym_mesh2pn_mesh
 import pymesh as pym
-from fileIO import read_mesh_file
-from util import pn_mesh2tr_mesh, tr_mesh2pn_mesh,fragment_pcl
-from camera_simulation import camera
+from src.fileIO import read_mesh_file
+from src.util import pn_mesh2tr_mesh, tr_mesh2pn_mesh,fragment_pcl
+from src.camera_simulation import camera
 import matplotlib.pyplot as plt
 import pickle
 import trimesh as tr
 
-target_mesh = read_mesh_file('../3d_model/Motor.stl')
+target_mesh = read_mesh_file('3d_model/Motor.stl')
 target_mesh.compute_vertex_normals()
 
 tr_target_mesh = pn_mesh2tr_mesh(target_mesh)
@@ -107,7 +107,7 @@ positions = [np.array([800*np.cos(theta),
                        800* np.sin(theta),
                        0]) for theta in np.linspace(0,2*np.pi,100)]
 #%%
-from localizer import localizer
+from src.localizer import localizer
 
 loc = localizer(target_mesh)
 #%%

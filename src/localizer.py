@@ -4,7 +4,7 @@ This script implement the class that does the localisation
 
 import open3d as pn
 import numpy as np
-from util import mesh2pcl, pn_mesh2pym_mesh , pym_mesh2pn_mesh, fragment_pcl
+from src.util import mesh2pcl, pn_mesh2pym_mesh , pym_mesh2pn_mesh
 import pymesh as pym
 import copy 
 
@@ -38,8 +38,7 @@ class localizer(object):
         print 'POINT CLOUD CONVERTION-----------'
         self.pn_target_outer_hull_pcl = mesh2pcl(self.pn_target_outer_hull, .5)
         print 'POINT CLOUD CONVERTION---------OK'
-        self.previous_icp_transformation = None
-        self.previous_ransac_transformation = None
+        self.previous_transformation = None
         
     def camera_position(self,pn_cam_pcl):
         cam_pose_pcl = pn.PointCloud()
@@ -54,19 +53,17 @@ class localizer(object):
         
         
         if self.previous_icp_transformation and self.previous_ransac_transformation:
-            cam_pose_pcl.transform(self.previous_ransac_transformation)
-            source.transform(self.previous_ransac_transformation)
-            cam_pose_pcl.transform(self.previous_icp_transformation)
-            source.transform(self.previous_icp_transformation)
+            cam_pose_pcl.transform(self.previous_transformation)
+            source.transform(self.previous_transformation)
             print 'ICP REGISTRATION-----------------'
             result_icp = pn.registration_icp(source, target,
                                              distance_threshold_icp,
                                              np.eye(4),
                                              pn.TransformationEstimationPointToPlane())
             print 'ICP REGISTRATION---------------OK'
-            self.previous_icp_transformation = result_icp.transformation 
+            self.previous_transformation = self.previous_transformation.dot(result_icp.transformation)
             cam_pose_pcl.transform(result_icp.transformation)
-            
+            return cam_pose_pcl.points[0], self.previous_transformation, result_icp.transformation
             
         else:
             print 'GLOBAL REGISTRATION--------------'
@@ -101,6 +98,8 @@ class localizer(object):
      
             print 'ICP REGISTRATION---------------OK'
             cam_pose_pcl.transform(result_icp.transformation)
+            
+            self.previous_transformation = result_ransac.transformation.dot(result_icp)
             
             return cam_pose_pcl.points[0], result_ransac, result_icp
         

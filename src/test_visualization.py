@@ -1,7 +1,7 @@
-from visualization import visualizer_3D
+from src.visualization import visualizer_3D
 import numpy as np
 import time
-from fileIO import read_mesh_file
+from src.fileIO import read_mesh_file
 
 
 model = read_mesh_file('3d_model/Motor.stl')
