@@ -38,6 +38,8 @@ class localizer(object):
         print 'POINT CLOUD CONVERTION-----------'
         self.pn_target_outer_hull_pcl = mesh2pcl(self.pn_target_outer_hull, .5)
         print 'POINT CLOUD CONVERTION---------OK'
+        self.previous_icp_transformation = None
+        self.previous_ransac_transformation = None
         
     def camera_position(self,pn_cam_pcl):
         cam_pose_pcl = pn.PointCloud()
@@ -49,38 +51,56 @@ class localizer(object):
         source_down, source_fpfh = preprocess_point_cloud(source, voxel_size)
         target_down, target_fpfh = preprocess_point_cloud(target, voxel_size)
         print 'PREPROCESS POINT CLOUD---------OK'
-        print 'GLOBAL REGISTRATION--------------'
-
-        result_ransac = pn.registration_ransac_based_on_feature_matching(
-                source_down, target_down, source_fpfh, target_fpfh,
-                distance_threshold_ransac,
-                pn.TransformationEstimationPointToPoint(False), 4,
-                [
-                        pn.CorrespondenceCheckerBasedOnDistance(distance_threshold_ransac)
-                ],
-                pn.RANSACConvergenceCriteria(10000000, 10000))
         
-#        if result_ransac.fitness < 0.7:
-#            print 'GLOBAL REGISTRATION----------FAIL'
-#            return np.array([0,0,0])
-
-        print 'GLOBAL REGISTRATION------------OK'
-        print 'ICP REGISTRATION-----------------'
-
-        cam_pose_pcl.transform(result_ransac.transformation)
-        source.transform(result_ransac.transformation)
-
-        result_icp = pn.registration_icp(source, target,
-                                         distance_threshold_icp,
-                                         np.eye(4),
-                                         pn.TransformationEstimationPointToPlane())
         
-#        if result_icp.fitness < 0.8:
-#            print 'ICP REGISTRATION-----------------'
-#            return np.array([0,0,0])
- 
-        print 'ICP REGISTRATION---------------OK'
-        cam_pose_pcl.transform(result_icp.transformation)
-        
-        return cam_pose_pcl.points[0], result_ransac, result_icp
+        if self.previous_icp_transformation and self.previous_ransac_transformation:
+            cam_pose_pcl.transform(self.previous_ransac_transformation)
+            source.transform(self.previous_ransac_transformation)
+            cam_pose_pcl.transform(self.previous_icp_transformation)
+            source.transform(self.previous_icp_transformation)
+            print 'ICP REGISTRATION-----------------'
+            result_icp = pn.registration_icp(source, target,
+                                             distance_threshold_icp,
+                                             np.eye(4),
+                                             pn.TransformationEstimationPointToPlane())
+            print 'ICP REGISTRATION---------------OK'
+            self.previous_icp_transformation = result_icp.transformation 
+            cam_pose_pcl.transform(result_icp.transformation)
+            
+            
+        else:
+            print 'GLOBAL REGISTRATION--------------'
+            result_ransac = pn.registration_ransac_based_on_feature_matching(
+                    source_down, target_down, source_fpfh, target_fpfh,
+                    distance_threshold_ransac,
+                    pn.TransformationEstimationPointToPoint(False), 4,
+                    [
+                            pn.CorrespondenceCheckerBasedOnDistance(distance_threshold_ransac)
+                    ],
+                    pn.RANSACConvergenceCriteria(10000000, 10000))
+            
+            
+    #        if result_ransac.fitness < 0.7:
+    #            print 'GLOBAL REGISTRATION----------FAIL'
+    #            return np.array([0,0,0])
     
+            print 'GLOBAL REGISTRATION------------OK'
+            print 'ICP REGISTRATION-----------------'
+    
+            cam_pose_pcl.transform(result_ransac.transformation)
+            source.transform(result_ransac.transformation)
+    
+            result_icp = pn.registration_icp(source, target,
+                                             distance_threshold_icp,
+                                             np.eye(4),
+                                             pn.TransformationEstimationPointToPlane())
+            
+    #        if result_icp.fitness < 0.8:
+    #            print 'ICP REGISTRATION-----------------'
+    #            return np.array([0,0,0])
+     
+            print 'ICP REGISTRATION---------------OK'
+            cam_pose_pcl.transform(result_icp.transformation)
+            
+            return cam_pose_pcl.points[0], result_ransac, result_icp
+        
