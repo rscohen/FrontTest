@@ -27,11 +27,13 @@ target_mesh.compute_vertex_normals()
 
 save_sim = []
 save_cam_ray_directions = []
-for i, theta in enumerate(np.linspace(0,2*np.pi,100)):
+sim_cam_position = []
+for i, theta in enumerate(np.linspace(0,np.pi/8,10)):
     print i 
     camera_position = np.array([800*np.cos(theta),
                                 800* np.sin(theta),
                                 0])
+    sim_cam_position.append(camera_position)
     vect = tr_target_mesh.centroid - camera_position
     vect  = vect * -1. / np.sqrt(vect.dot(vect.T))
     orientation = [0,
@@ -41,7 +43,7 @@ for i, theta in enumerate(np.linspace(0,2*np.pi,100)):
     ray_directions, cam_ray_directions = cam.ray_directions()
     save_cam_ray_directions.append(cam_ray_directions)
     
-    pcl_sim, depth_map = cam.simulate_camera_mesh(target_mesh,real=True)
+    pcl_sim, depth_map = cam.simulate_camera_mesh(target_mesh,real=True, err=0)
     save_sim.append(pcl_sim)
     plt.imsave('simulation/depthmap/im%s.png' %i, depth_map)
 
@@ -112,22 +114,18 @@ from src.localizer import localizer
 loc = localizer(target_mesh)
 #%%
 import time
-save_result_ransac = []
-save_result_icp = []
+save_transfomation = []
 cam_positions = []
 times = []
 for i in range(len(pn_sim_pcl)):
     start_time = time.time()
-    cam_pos, result_ransac, result_icp = loc.camera_position(pn_sim_pcl[i])
-    save_result_ransac.append([result_ransac.fitness,result_ransac.transformation])
-    save_result_icp.append([result_icp.fitness,result_icp.transformation])
+    cam_pos = loc.camera_position(pn_sim_pcl[i])
     cam_positions.append(cam_pos)
     print i ,start_time - time.time()
     times.append(start_time - time.time())
 
 #%%
-pickle.dump(save_result_ransac, open('simulation/save_result_ransac.save', 'wb'))
-pickle.dump(save_result_icp, open('simulation/save_result_icp.save', 'wb'))
+pickle.dump(save_transfomation, open('simulation/save_transfomation.save', 'wb'))
 pickle.dump(cam_positions, open('simulation/cam_positions.save', 'wb'))
 pickle.dump(times, open('simulation/times.save', 'wb'))
 
@@ -158,8 +156,8 @@ for i in range(len(save_result_ransac)):
     source.points = pn.Vector3dVector(save_sim[i])
     source.paint_uniform_color([1, 0.706, 0])
     
-    source.transform(save_result_ransac[i][1])
-    pn_cam.transform(save_result_ransac[i][1])
+    source.transform(save_transfomation[i][0])
+    pn_cam.transform(save_transfomation[i][0])
     
     vis.add_geometry(source)
     vis.add_geometry(pn_cam)

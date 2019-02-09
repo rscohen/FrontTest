@@ -1,14 +1,14 @@
 import open3d as pn
 import numpy as np
-from util import mesh2pcl, pn_mesh2pym_mesh , pym_mesh2pn_mesh
+from src.util import mesh2pcl, pn_mesh2pym_mesh , pym_mesh2pn_mesh
 import pymesh as pym
-from fileIO import read_mesh_file
-from util import pn_mesh2tr_mesh, tr_mesh2pn_mesh,fragment_pcl
-from camera_simulation import camera
+from src.fileIO import read_mesh_file
+from src.util import pn_mesh2tr_mesh, tr_mesh2pn_mesh,fragment_pcl
+from src.camera_simulation import camera
 import copy
 import time
 
-target_mesh = read_mesh_file('../3d_model/Motor.stl')
+target_mesh = read_mesh_file('3d_model/Motor.stl')
 #%%
 tr_target_mesh = pn_mesh2tr_mesh(target_mesh)
 mesh_1, mesh_2 = tr_target_mesh.split()[[2,8]]
@@ -26,7 +26,7 @@ pn_target_outer_hull_pcl = mesh2pcl(pn_target_outer_hull,.5)
 fragments = fragment_pcl(pn_target_outer_hull_pcl,150)
 
 #%%
-theta = np.pi 
+theta = np.pi / 2
 D = 600
 camera_position = D * np.array([np.cos(theta),
                                 np.sin(theta),
