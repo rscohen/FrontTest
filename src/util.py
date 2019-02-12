@@ -120,3 +120,29 @@ def fragment_pcl(pn_pcl, min_dist):
                 fragment = pn.crop_point_cloud(pn_pcl, bound, bound +step)
                 fragments.append(fragment)
     return fragments
+
+
+
+def transformation_matrix(source_points, target_points):
+    """
+    Compute the transformation matrix between to set of matching points. 
+  
+    Parameters: 
+        source_points (numpy.arrays): the source points array 
+        target_points (numpy.arrays): the target points array matching the 
+            source
+        
+    Returns: 
+        transformation_matrix (numpy.arrays) : The 4D transformation matrix from source to target
+        
+    """
+    assert(len(source_points)>=3 and len(target_points)==len(source_points))
+    source = pn.PointCloud()
+    source.points = pn.Vector3dVector(source_points)
+    target = pn.PointCloud()
+    target.points = pn.Vector3dVector(target_points)
+    corr = np.array(2*[range(len(source_points))]).T
+    p2p = pn.TransformationEstimationPointToPoint()
+    trans = p2p.compute_transformation(source, target,
+             pn.Vector2iVector(corr))
+    return trans
