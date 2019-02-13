@@ -6,7 +6,6 @@ DS5_product_ids = ["0AD1", "0AD2", "0AD3", "0AD4", "0AD5", "0AF6", "0AFE", "0AFF
 
 def find_device_that_supports_advanced_mode() :
     ctx = rs.context()
-    ds5_dev = rs.device()
     devices = ctx.query_devices();
     for dev in devices:
         if dev.supports(rs.camera_info.product_id) and str(dev.get_info(rs.camera_info.product_id)) in DS5_product_ids:
@@ -71,7 +70,7 @@ try:
         as_json_object = {k.encode('utf-8'): v.encode("utf-8") for k, v in as_json_object.items()}
     # The C++ JSON parser requires double-quotes for the json object so we need
     # to replace the single quote of the pythonic json to double-quotes
-    json_string = str(as_json_object).replace("'", '\"')
+    json_string = str(as_json_object).replace("'", '\"').replace(".",",")
     advnc_mode.load_json(json_string)
 
 except Exception as e:
