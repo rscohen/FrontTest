@@ -4,7 +4,7 @@ This script implement the class that does the localisation
 
 import open3d as pn
 import numpy as np
-from src.util import mesh2pcl, pn_mesh2pym_mesh , pym_mesh2pn_mesh, fragment_pcl
+from src.util import mesh2pcl, pn_mesh2pym_mesh , pym_mesh2pn_mesh, fragment_pcl, list_apply
 import pymesh as pym
 import copy 
 
@@ -27,19 +27,103 @@ def preprocess_point_cloud(pcd, voxel_size):
                                        pn.KDTreeSearchParamHybrid(radius = radius_feature, max_nn = 50))
     return pcd_down, pcd_fpfh
 
+
+
+def icp_registration(source, target, distance_threshold):
+    pn.estimate_normals(source)
+    pn.estimate_normals(target)
+    icp_result = pn.registration_icp(source, target,
+                                     distance_threshold,
+                                     np.eye(4),
+                                     pn.TransformationEstimationPointToPlane())
+    return icp_result
+
+
 class localizer(object):
-    def __init__(self, pn_tagert_mesh):
-        self.pn_target_mesh = pn_tagert_mesh  
-        self.pym_target_mesh = pn_mesh2pym_mesh(self.pn_target_mesh)
-        print 'OUTER HULL ----------------------'
-        self.pym_target_outer_hull = pym.outerhull.compute_outer_hull(self.pym_target_mesh)
-        self.pn_target_outer_hull = pym_mesh2pn_mesh(self.pym_target_outer_hull)
-        print 'OUTER HULL --------------------OK'
-        print 'POINT CLOUD CONVERTION-----------'
-        self.pn_target_outer_hull_pcl = mesh2pcl(self.pn_target_outer_hull, .5)
-        print 'POINT CLOUD CONVERTION---------OK'
-        self.previous_transformation = np.array([])
+    """ 
+    Class for computing the camera position. 
+      
+    Attributes: 
+        model_mesh (open3d.TriangleMesh) :
+        target_pcl (opend3d.PointCloud) : 
+        previous_transformation (numpy.ndarray) : 
+        source_pcl (open3d.PointCloud) : 
+        source_to_target_transformation (numpy.ndarray) : 
+        previous_transformations (numpy.ndarray) :
+    """
+    
+    def __init__(self, model_mesh):
+        """ 
+        Constructor for localizer class. 
+  
+        Parameters: 
+            model_mesh (open3d.TriangleMesh) :
+        """
+        self.model_mesh = model_mesh  
+        pym_target_mesh = pn_mesh2pym_mesh(self.model_mesh)
         
+        # Computing model outer hull 
+        pym_target_outer_hull = pym.outerhull.compute_outer_hull(pym_target_mesh)
+        pn_target_outer_hull = pym_mesh2pn_mesh(pym_target_outer_hull)
+        
+        # the model_mesh is supposed to be the target (ie the known environement observed 
+        # by the camera)
+        
+        # Converting the target mesh to a target pcl
+        self.target_pcl = mesh2pcl(pn_target_outer_hull, .5)
+        self.previous_transformation = np.array([])
+        self.previous_transformations = []
+        self.source_to_target_transformation = np.array([])
+        self.source_pcl = pn.PointCloud()
+    
+    def update_source(self, camera_point_cloud):
+        """
+        Function to add new camera frame data to the source point cloud
+        
+        Parameters: self.source_pcl
+            camera_point_cloud (open3d.PointCloud) : point cloud from the camera frame 
+        """
+        camera_pcl = copy.deepcopy(camera_point_cloud)
+        
+        if self.source_pcl.is_empty():
+            self.source_pcl = self.source_pcl + camera_pcl
+            return
+        else:
+            icp_result = icp_registration(self.source_pcl,
+                                          camera_pcl,
+                                          3)
+            if icp_result.fitness > 0.95:
+                icp_result.transformation = icp_result.transformation
+                self.previous_transformations.append(icp_result.transformation)
+                self.source_pcl.transform(icp_result.transformation)
+                self.source_pcl = self.source_pcl + camera_pcl
+                self.source_pc = pn.voxel_down_sample(self.source_pc, 1)
+                self.source_to_target_transformation = \
+                    self.source_to_target_transformation.dot(icp_result.transformation)
+        if len(self.previous_transformations) > 300:
+            self.previous_transformations.pop(0)
+        return
+    
+    
+    def update_source_to_target_transformation(self):
+        """
+        Function to update the source to target transformation matrix
+        
+         
+        """
+        source = copy.deepcopy(self.source_pcl)
+        target = pn.voxel_down_sample(self.target_pcl,
+                                      target_voxel_size)
+        # PREPROCESSING POINt CLOUD
+        source_down, source_fpfh = preprocess_point_cloud(source, voxel_size)
+        target_down, target_fpfh = preprocess_point_cloud(target, voxel_size)
+        
+        # GLOBAL REGISTRATION
+        
+        
+        return
+    
+    
     def camera_position(self,pn_cam_pcl):
         cam_pose_pcl = pn.PointCloud()
         cam_pose_pcl.points = pn.Vector3dVector(np.array([[0,0,0]]))  
