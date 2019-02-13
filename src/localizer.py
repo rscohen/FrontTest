@@ -4,7 +4,7 @@ This script implement the class that does the localisation
 
 import open3d as pn
 import numpy as np
-from src.util import mesh2pcl, pn_mesh2pym_mesh , pym_mesh2pn_mesh, fragment_pcl, list_apply
+from src.util import mesh2pcl, pn_mesh2pym_mesh , pym_mesh2pn_mesh, fragment_pcl
 import pymesh as pym
 import copy 
 
@@ -98,8 +98,10 @@ class localizer(object):
                 self.source_pcl.transform(icp_result.transformation)
                 self.source_pcl = self.source_pcl + camera_pcl
                 self.source_pc = pn.voxel_down_sample(self.source_pc, 1)
-                self.source_to_target_transformation = \
-                    self.source_to_target_transformation.dot(icp_result.transformation)
+                
+                if self.source_to_target_transformation.any():
+                    self.source_to_target_transformation = \
+                        self.source_to_target_transformation.dot(icp_result.transformation)
         if len(self.previous_transformations) > 300:
             self.previous_transformations.pop(0)
         return
@@ -114,45 +116,29 @@ class localizer(object):
         source = copy.deepcopy(self.source_pcl)
         target = pn.voxel_down_sample(self.target_pcl,
                                       target_voxel_size)
-        # PREPROCESSING POINt CLOUD
-        source_down, source_fpfh = preprocess_point_cloud(source, voxel_size)
-        target_down, target_fpfh = preprocess_point_cloud(target, voxel_size)
         
-        # GLOBAL REGISTRATION
-        
-        
-        return
-    
-    
-    def camera_position(self,pn_cam_pcl):
-        cam_pose_pcl = pn.PointCloud()
-        cam_pose_pcl.points = pn.Vector3dVector(np.array([[0,0,0]]))  
-        source = copy.deepcopy(pn_cam_pcl)
-        target = pn.voxel_down_sample(self.pn_target_outer_hull_pcl,
-                                      target_voxel_size)
-        print 'PREPROCESS POINT CLOUD-----------'
-        source_down, source_fpfh = preprocess_point_cloud(source, voxel_size)
-        target_down, target_fpfh = preprocess_point_cloud(target, voxel_size)
-        print 'PREPROCESS POINT CLOUD---------OK'
-        print 'GLOBAL REGISTRATION--------------'
-        if self.previous_transformation.any():
-            cam_pose_pcl.transform(self.previous_transformation)
-            source.transform(self.previous_transformation)
-    
-            result_icp = pn.registration_icp(source, target,
+        if self.source_to_target_transformation.any():
+            # if the global registration have already been done
+            source.transform(self.source_to_target_transformation)
+            icp_result = pn.registration_icp(source, target,
                                              distance_threshold_icp,
                                              np.eye(4),
                                              pn.TransformationEstimationPointToPlane())
-            self.previous_transformation = result_icp.transformation.dot(self.previous_transformation)
-            cam_pose_pcl.transform(result_icp.transformation)
-            
-            return cam_pose_pcl.points[0]
+            if icp_result.fitness > 0.8:
+                self.source_to_target_transformation =\
+                    icp_result.transformation.dot(self.source_to_target_transformation)
+                return
         
-        cam_pose_pcl = pn.PointCloud()
-        cam_pose_pcl.points = pn.Vector3dVector(np.array([[0,0,0]]))  
-        source = copy.deepcopy(pn_cam_pcl)
+        # we fail to align source & target with ICP
+        # GLOBAL REGISTRATION
+        # PREPROCESSING POINT CLOUD
+        source = copy.deepcopy(self.source_pcl)
         
-        result_ransac = pn.registration_ransac_based_on_feature_matching(
+        source_down, source_fpfh = preprocess_point_cloud(source, voxel_size)
+        target_down, target_fpfh = preprocess_point_cloud(target, voxel_size)
+        
+        # GLOBAL REGISTRATION 
+        ransac_result = pn.registration_ransac_based_on_feature_matching(
                 source_down, target_down, source_fpfh, target_fpfh,
                 distance_threshold_ransac,
                 pn.TransformationEstimationPointToPoint(False), 4,
@@ -161,26 +147,36 @@ class localizer(object):
                 ],
                 pn.RANSACConvergenceCriteria(10000000, 10000))
         
-#        if result_ransac.fitness < 0.7:
-#            print 'GLOBAL REGISTRATION----------FAIL'
-#            return np.array([0,0,0])
+        source.transform(ransac_result.transformation)
 
-        print 'GLOBAL REGISTRATION------------OK'
-        print 'ICP REGISTRATION-----------------'
-
-        cam_pose_pcl.transform(result_ransac.transformation)
-        source.transform(result_ransac.transformation)
-
-        result_icp = pn.registration_icp(source, target,
+        icp_result = pn.registration_icp(source, target,
                                          distance_threshold_icp,
                                          np.eye(4),
                                          pn.TransformationEstimationPointToPlane())
         
-#        if result_icp.fitness < 0.8:
-#            print 'ICP REGISTRATION-----------------'
-#            return np.array([0,0,0])
- 
-        print 'ICP REGISTRATION---------------OK'
-        cam_pose_pcl.transform(result_icp.transformation)
-        self.previous_transformation = result_icp.transformation.dot(result_ransac.transformation)
-        return cam_pose_pcl.points[0]
+        
+        self.source_to_target_transformation = \
+            icp_result.transformation.dot(ransac_result.transformation)
+        
+        return
+    
+    def camera_coordinates(self):
+        """
+        Function to retrive the camera coordinates (O, i, j, k) system in the model 
+        coordinates system
+        
+        Return 
+            O (numpy.ndarray) : the origin
+            i (numpy.ndarray) :
+            j (numpy.ndarray) :
+            k (numpy.ndarray) :
+        """
+        coordinates_system =   pn.PointCloud()
+        coordinates_system.points = pn.Vector3dVector(np.array([[0, 0, 0],
+                                                                [1, 0, 0],
+                                                                [0, 1, 0],
+                                                                [0, 0, 1]]))
+        
+        coordinates_system.transform(self.source_to_target_transformation)
+        
+        return [coordinates_system.points[i] for i in range(4)]

@@ -1,5 +1,5 @@
 """
-This script is testint the localizer class
+This script is testing the localizer class
 """
 
 import open3d as pn
@@ -23,7 +23,15 @@ tr_target_mesh = mesh_1 + mesh_2
 target_mesh = tr_mesh2pn_mesh(tr_target_mesh)
 
 target_mesh.compute_vertex_normals()
-#%% camera annimation
+#%% camera circular trajectory simulation
+
+
+V = .1 # m/s
+fps = 30
+simulation_time = 1 # s
+dist = V * simulation_time # m
+
+print 
 
 save_sim = []
 save_cam_ray_directions = []
