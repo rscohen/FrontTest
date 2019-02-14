@@ -12,7 +12,8 @@ from src.camera_simulation import camera
 import matplotlib.pyplot as plt
 import pickle
 import trimesh as tr
-
+import time
+#%%
 target_mesh = read_mesh_file('3d_model/Motor.stl')
 target_mesh.compute_vertex_normals()
 
@@ -23,196 +24,103 @@ tr_target_mesh = mesh_1 + mesh_2
 target_mesh = tr_mesh2pn_mesh(tr_target_mesh)
 
 target_mesh.compute_vertex_normals()
-#%% camera circular trajectory simulation
+#%% camera circular trajectory settings
+V = 2 # m/s
+fps = 5
+simulation_time = 10 # s
+start_angle = 0 # degree
+Z = 0
+radius = 800 # mmm
 
-
-V = .1 # m/s
-fps = 30
-simulation_time = 1 # s
-dist = V * simulation_time # m
-
-print 
+dist = V * simulation_time * 100 # mm
+nb_of_frames = fps * simulation_time
+rotation_angle =  dist / (2 * np.pi * radius)
+#%% CAMERA SIMULATION
 
 save_sim = []
-save_cam_ray_directions = []
-sim_cam_position = []
-for i, theta in enumerate(np.linspace(0,np.pi/8,10)):
+cam_ray_directions = []
+cam_positions = []
+cam_point_clouds = []
+cam_depth_images = []
+for i, theta in enumerate(np.linspace(0, rotation_angle, nb_of_frames)):
     print i 
-    camera_position = np.array([800*np.cos(theta),
-                                800* np.sin(theta),
-                                0])
-    sim_cam_position.append(camera_position)
+    theta = theta + start_angle
+    camera_position = np.array([radius*np.cos(theta),
+                                radius*np.sin(theta),
+                                Z])
+    cam_positions.append(camera_position)
     vect = tr_target_mesh.centroid - camera_position
     vect  = vect * -1. / np.sqrt(vect.dot(vect.T))
     orientation = [0,
                    +np.arcsin(vect[2]),
                    np.pi + theta]
-    cam = camera(resolution = [224,171], camera_position = camera_position,orientation=orientation)
-    ray_directions, cam_ray_directions = cam.ray_directions()
-    save_cam_ray_directions.append(cam_ray_directions)
     
-    pcl_sim, depth_map = cam.simulate_camera_mesh(target_mesh,real=True, err=0)
-    save_sim.append(pcl_sim)
-    plt.imsave('simulation/depthmap/im%s.png' %i, depth_map)
+    cam = camera(resolution = [224,171],
+                 camera_position = camera_position,
+                 orientation=orientation)
+    ray_directions, cam_ray_direction = cam.ray_directions()
+    cam_ray_directions.append(cam_ray_direction)
+    
+    cam_point_cloud, depth_image = cam.simulate_camera_mesh(target_mesh,real=True, err=0)
+    cam_point_clouds.append(cam_point_cloud)
+    cam_depth_images.append(depth_image)
 
-pickle.dump(cam_ray_directions, open('simulation/cam_ray_directions.save', 'wb'))
-pickle.dump(save_sim, open('simulation/save_sim.save', 'wb'))
-#%%  
-#cam_ray_directions = save_cam_ray_directions
-cam_ray_directions = np.concatenate([cam_ray_directions,np.array([[0,0,0]])], axis=0)
-pn_cam = pn.PointCloud()
-pn_cam.points = pn.Vector3dVector(cam_ray_directions*100)
-pn_cam.paint_uniform_color([0, 0.651, 0.929])
+cam_point_clouds = np.array(cam_point_clouds)
+cam_depth_images = np.array(cam_depth_images)
+file_name = "V_%s_fps_%s_simulation_time_%s_start_angle_%s_Z_%s_radius_%s" %(V, fps, simulation_time, start_angle, Z, radius)
+
+np.save("simulation/cam_point_clouds_" + file_name, cam_point_clouds)
+np.save("simulation/cam_depth_images_" + file_name, cam_depth_images)
+
+#%% PLOTING CAM POINT CLOUD
 
 source = pn.PointCloud() 
 
 vis = pn.Visualizer()
-
 vis.create_window()
-vis.add_geometry(pn_cam)
-
-
-for i in range(len(save_sim)):
-    pcl_sim = save_sim[i]
-    source.points = pn.Vector3dVector(pcl_sim)
-    source.paint_uniform_color([1, 0.706, 0])
-    vis.add_geometry(source)
-
-    vis.update_geometry()
-    vis.poll_events()
-    vis.update_renderer()
-    vis.capture_screen_image("simulation/pointcloud2/temp_%04d.jpg" % (i))
+for i in range(10):
+    for i, point_cloud in enumerate(cam_point_clouds):
+        time.sleep(1/fps)
+        source.points = pn.Vector3dVector(point_cloud)
+        source.paint_uniform_color([1, 0.706, 0])
+        vis.add_geometry(source)
+        vis.update_geometry()
+        vis.poll_events()
+        vis.update_renderer()
 
 vis.destroy_window()
 
-#%%
+#%% PLOTING CAM DEPTH MAP
 
-for i in range(len(save_sim)):
-    pcl_sim = save_sim[i]
-    source = tr.PointCloud(vertices =pcl_sim )
-    source.colors  = np.array([[1, 0.706, 0, 1]]* len(pcl_sim))
+for i in range(50):
+    for i, depth_image in enumerate(cam_depth_images):
+        plt.figure(1); plt.clf()
+        plt.imshow(depth_image)
+        plt.pause(1/fps)
 
-    tr_cam = tr.PointCloud(vertices=cam_ray_directions * 20)
-    tr_cam.colors  = np.array([[0, 0.651, 0.92, 1]]* len(cam_ray_directions))
+#%% CONVERTING NUMPY PCL LIST TO open3d PCL LIST
+        
+cam_pcl_list = []
+for point_cloud in cam_point_clouds:
+    cam_pcl = pn.PointCloud() 
+    cam_pcl.paint_uniform_color([1, 0.706, 0])
+    cam_pcl.points = pn.Vector3dVector(point_cloud)
+    cam_pcl_list.append(cam_pcl)
+
+#%% INITIALISING LOCALIZER
     
-    scene = tr.Scene([source,tr_cam])
-    center =np.array([100,100,0]) + scene.centroid
-
-    scene.set_camera(angles=[np.pi/2,-np.pi/2,0],
-                     center= center)
-#    scene.show()
-#    print scene.scale
-    f = file('simulation/pointcloud/cam%s.png' %i,'wr')
-    f.write(scene.save_image())
-    f.close()
-
-#%%
-pn_sim_pcl = []
-for pcl_sim in save_sim:
-    source = pn.PointCloud() 
-    source.points = pn.Vector3dVector(pcl_sim)
-    pn_sim_pcl.append(source)
-    
-positions = [np.array([800*np.cos(theta),
-                       800* np.sin(theta),
-                       0]) for theta in np.linspace(0,2*np.pi,100)]
-#%%
 from src.localizer import localizer
 
 loc = localizer(target_mesh)
-#%%
+
 import time
 save_transfomation = []
 cam_positions = []
 times = []
-for i in range(len(pn_sim_pcl)):
+
+for cam_pcl in cam_pcl_list:
     start_time = time.time()
-    cam_pos = loc.camera_position(pn_sim_pcl[i])
-    cam_positions.append(cam_pos)
-    print i ,start_time - time.time()
-    times.append(start_time - time.time())
-
+    loc.update_source(cam_pcl)
+    print start_time - time.time()
 #%%
-pickle.dump(save_transfomation, open('simulation/save_transfomation.save', 'wb'))
-pickle.dump(cam_positions, open('simulation/cam_positions.save', 'wb'))
-pickle.dump(times, open('simulation/times.save', 'wb'))
-
-#%%
-import pickle
-
-save_sim = pickle.load(open('simulation/save_sim.save', 'rb'))
-save_result_ransac = pickle.load(open('simulation/save_result_ransac.save', 'rb'))
-save_result_icp = pickle.load(open('simulation/save_result_icp.save', 'rb'))
-cam_positions = pickle.load(open('simulation/cam_positions.save', 'rb'))
-times = pickle.load(file('simulation/times.save', 'rb'))
-#%%
-vis = pn.Visualizer()
-
-vis.create_window()
-vis.add_geometry(target_mesh)
-vis.run()
-source = pn.PointCloud() 
-
-
-for i in range(len(save_result_ransac)):
-
-    
-    pn_cam = pn.PointCloud()
-    pn_cam.points = pn.Vector3dVector(cam_ray_directions*100)
-    pn_cam.paint_uniform_color([0, 0.651, 0.929])
-    
-    source.points = pn.Vector3dVector(save_sim[i])
-    source.paint_uniform_color([1, 0.706, 0])
-    
-    source.transform(save_transfomation[i][0])
-    pn_cam.transform(save_transfomation[i][0])
-    
-    vis.add_geometry(source)
-    vis.add_geometry(pn_cam)
-    
-    vis.update_geometry()
-    vis.poll_events()
-    vis.update_renderer()
-    vis.run()
-    
-    vis.capture_screen_image("simulation/ransac_registration/temp_%04d.jpg" % (i))
-
-vis.destroy_window()
-
- #%%
-vis = pn.Visualizer()
-
-vis.create_window()
-vis.add_geometry(target_mesh)
-vis.run()
-
-source = pn.PointCloud() 
-
-for i in range(len(save_result_ransac)):
-
-    
-    pn_cam = pn.PointCloud()
-    pn_cam.points = pn.Vector3dVector(cam_ray_directions*100)
-    pn_cam.paint_uniform_color([0, 0.651, 0.929])
-    
-    source.points = pn.Vector3dVector(save_sim[i])
-    source.paint_uniform_color([1, 0.706, 0])
-    
-    source.transform(save_result_ransac[i][1])
-    pn_cam.transform(save_result_ransac[i][1])
-    source.transform(save_result_icp[i][1])
-    pn_cam.transform(save_result_icp[i][1])
-    
-    vis.add_geometry(source)
-    vis.add_geometry(pn_cam)
-    
-    vis.update_geometry()
-    vis.poll_events()
-    vis.update_renderer()
-    vis.run()
-    
-    vis.capture_screen_image("simulation/icp_registration/temp_%04d.jpg" % (i))
-
-vis.destroy_window()
-
-    
+pn.draw_geometries([loc.source_pcl])

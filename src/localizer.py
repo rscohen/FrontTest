@@ -60,17 +60,17 @@ class localizer(object):
             model_mesh (open3d.TriangleMesh) :
         """
         self.model_mesh = model_mesh  
-        pym_target_mesh = pn_mesh2pym_mesh(self.model_mesh)
+#        pym_target_mesh = pn_mesh2pym_mesh(self.model_mesh)
         
         # Computing model outer hull 
-        pym_target_outer_hull = pym.outerhull.compute_outer_hull(pym_target_mesh)
-        pn_target_outer_hull = pym_mesh2pn_mesh(pym_target_outer_hull)
+#        pym_target_outer_hull = pym.outerhull.compute_outer_hull(pym_target_mesh)
+#        pn_target_outer_hull = pym_mesh2pn_mesh(pym_target_outer_hull)
         
         # the model_mesh is supposed to be the target (ie the known environement observed 
         # by the camera)
         
         # Converting the target mesh to a target pcl
-        self.target_pcl = mesh2pcl(pn_target_outer_hull, .5)
+#        self.target_pcl = mesh2pcl(pn_target_outer_hull, .5)
         self.previous_transformation = np.array([])
         self.previous_transformations = []
         self.source_to_target_transformation = np.array([])
@@ -92,16 +92,16 @@ class localizer(object):
             icp_result = icp_registration(self.source_pcl,
                                           camera_pcl,
                                           3)
-            if icp_result.fitness > 0.95:
-                icp_result.transformation = icp_result.transformation
-                self.previous_transformations.append(icp_result.transformation)
-                self.source_pcl.transform(icp_result.transformation)
-                self.source_pcl = self.source_pcl + camera_pcl
-                self.source_pc = pn.voxel_down_sample(self.source_pc, 1)
-                
-                if self.source_to_target_transformation.any():
-                    self.source_to_target_transformation = \
-                        self.source_to_target_transformation.dot(icp_result.transformation)
+#            if icp_result.fitness > 0.95:
+            icp_result.transformation = icp_result.transformation
+            print icp_result.fitness
+            self.previous_transformations.append(icp_result.transformation)
+            self.source_pcl.transform(icp_result.transformation)
+            self.source_pcl = self.source_pcl + camera_pcl
+            self.source_pcl = pn.voxel_down_sample(self.source_pcl, 3)
+            if self.source_to_target_transformation.any():
+                self.source_to_target_transformation = \
+                    self.source_to_target_transformation.dot(icp_result.transformation)
         if len(self.previous_transformations) > 300:
             self.previous_transformations.pop(0)
         return
@@ -171,6 +171,31 @@ class localizer(object):
             j (numpy.ndarray) :
             k (numpy.ndarray) :
         """
+        if self.source_to_target_transformation.any():
+            print "You need to update source to target transformation first"
+            return
+        coordinates_system =   pn.PointCloud()
+        coordinates_system.points = pn.Vector3dVector(np.array([[0, 0, 0],
+                                                                [1, 0, 0],
+                                                                [0, 1, 0],
+                                                                [0, 0, 1]]))
+        
+        coordinates_system.transform(self.source_to_target_transformation)
+        
+        return [coordinates_system.points[i] for i in range(4)]
+    
+    
+    def camera_coordinates_history(self):
+        """
+        Function to retrive the previous camera coordinates (O, i, j, k) system in the model 
+        coordinates system
+        
+        Return 
+            camera_coordinates_history (list): 
+        """
+        if self.source_to_target_transformation.any():
+            print "You need to update source to target transformation first"
+            return
         coordinates_system =   pn.PointCloud()
         coordinates_system.points = pn.Vector3dVector(np.array([[0, 0, 0],
                                                                 [1, 0, 0],
