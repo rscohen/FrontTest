@@ -145,3 +145,6 @@ def transformation_matrix(source_points, target_points):
     trans = p2p.compute_transformation(source, target,
              pn.Vector2iVector(corr))
     return trans
+
+def list_apply(l, f):
+    return [f(x) for x in l]

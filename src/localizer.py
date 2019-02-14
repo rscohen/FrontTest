@@ -7,6 +7,8 @@ import numpy as np
 from src.util import mesh2pcl, pn_mesh2pym_mesh , pym_mesh2pn_mesh, fragment_pcl
 import pymesh as pym
 import copy 
+from numpy.linalg import inv
+
 
 target_voxel_size = 1
 voxel_size = 5
@@ -27,48 +29,117 @@ def preprocess_point_cloud(pcd, voxel_size):
                                        pn.KDTreeSearchParamHybrid(radius = radius_feature, max_nn = 50))
     return pcd_down, pcd_fpfh
 
+
+
+def icp_registration(source, target, distance_threshold):
+    pn.estimate_normals(source)
+    pn.estimate_normals(target)
+    icp_result = pn.registration_icp(source, target,
+                                     distance_threshold,
+                                     np.eye(4),
+                                     pn.TransformationEstimationPointToPlane())
+    return icp_result
+
+
 class localizer(object):
-    def __init__(self, pn_tagert_mesh):
-        self.pn_target_mesh = pn_tagert_mesh  
-        self.pym_target_mesh = pn_mesh2pym_mesh(self.pn_target_mesh)
-        print 'OUTER HULL ----------------------'
-        self.pym_target_outer_hull = pym.outerhull.compute_outer_hull(self.pym_target_mesh)
-        self.pn_target_outer_hull = pym_mesh2pn_mesh(self.pym_target_outer_hull)
-        print 'OUTER HULL --------------------OK'
-        print 'POINT CLOUD CONVERTION-----------'
-        self.pn_target_outer_hull_pcl = mesh2pcl(self.pn_target_outer_hull, .5)
-        print 'POINT CLOUD CONVERTION---------OK'
-        self.previous_transformation = np.array([])
-        
-    def camera_position(self,pn_cam_pcl):
-        cam_pose_pcl = pn.PointCloud()
-        cam_pose_pcl.points = pn.Vector3dVector(np.array([[0,0,0]]))  
-        source = copy.deepcopy(pn_cam_pcl)
-        target = pn.voxel_down_sample(self.pn_target_outer_hull_pcl,
-                                      target_voxel_size)
-        print 'PREPROCESS POINT CLOUD-----------'
-        source_down, source_fpfh = preprocess_point_cloud(source, voxel_size)
-        target_down, target_fpfh = preprocess_point_cloud(target, voxel_size)
-        print 'PREPROCESS POINT CLOUD---------OK'
-        print 'GLOBAL REGISTRATION--------------'
-        if self.previous_transformation.any():
-            cam_pose_pcl.transform(self.previous_transformation)
-            source.transform(self.previous_transformation)
+    """ 
+    Class for computing the camera position. 
+      
+    Attributes: 
+        model_mesh (open3d.TriangleMesh) :
+        target_pcl (opend3d.PointCloud) : 
+        previous_transformation (numpy.ndarray) : 
+        source_pcl (open3d.PointCloud) : 
+        source_to_target_transformation (numpy.ndarray) : 
+        previous_transformations (numpy.ndarray) :
+    """
     
-            result_icp = pn.registration_icp(source, target,
+    def __init__(self, model_mesh):
+        """ 
+        Constructor for localizer class. 
+  
+        Parameters: 
+            model_mesh (open3d.TriangleMesh) :
+        """
+        self.model_mesh = model_mesh  
+        pym_target_mesh = pn_mesh2pym_mesh(self.model_mesh)
+        
+        # Computing model outer hull 
+        pym_target_outer_hull = pym.outerhull.compute_outer_hull(pym_target_mesh)
+        pn_target_outer_hull = pym_mesh2pn_mesh(pym_target_outer_hull)
+        
+        # the model_mesh is supposed to be the target (ie the known environement observed 
+        # by the camera)
+        
+        # Converting the target mesh to a target pcl
+        self.target_pcl = mesh2pcl(pn_target_outer_hull, .5)
+        self.previous_transformation = np.array([])
+        self.previous_transformations = []
+        self.source_to_target_transformation = np.array([])
+        self.source_pcl = pn.PointCloud()
+    
+    def update_source(self, camera_point_cloud):
+        """
+        Function to add new camera frame data to the source point cloud
+        
+        Parameters: self.source_pcl
+            camera_point_cloud (open3d.PointCloud) : point cloud from the camera frame 
+        """
+        camera_pcl = copy.deepcopy(camera_point_cloud)
+        
+        if self.source_pcl.is_empty():
+            self.source_pcl = self.source_pcl + camera_pcl
+            return
+        else:
+            icp_result = icp_registration(self.source_pcl,
+                                          camera_pcl,
+                                          3)
+            icp_result.transformation = icp_result.transformation
+            print icp_result.fitness
+            self.previous_transformations.append(icp_result.transformation)
+            self.source_pcl.transform(icp_result.transformation)
+            self.source_pcl = self.source_pcl + camera_pcl
+            self.source_pcl = pn.voxel_down_sample(self.source_pcl, 2)
+            if self.source_to_target_transformation.any():
+                self.source_to_target_transformation = \
+                    self.source_to_target_transformation.dot(icp_result.transformation)
+        if len(self.previous_transformations) > 300:
+            self.previous_transformations.pop(0)
+        return
+    
+    
+    def update_source_to_target_transformation(self):
+        """
+        Function to update the source to target transformation matrix
+        
+         
+        """
+        source = copy.deepcopy(self.source_pcl)
+        target = pn.voxel_down_sample(self.target_pcl,
+                                      target_voxel_size)
+        
+        if self.source_to_target_transformation.size > 0:
+            # if the global registration have already been done
+            source.transform(self.source_to_target_transformation)
+            icp_result = pn.registration_icp(source, target,
                                              distance_threshold_icp,
                                              np.eye(4),
                                              pn.TransformationEstimationPointToPlane())
-            self.previous_transformation = result_icp.transformation.dot(self.previous_transformation)
-            cam_pose_pcl.transform(result_icp.transformation)
-            
-            return cam_pose_pcl.points[0]
+            if icp_result.fitness > 0.8:
+                self.source_to_target_transformation =\
+                    icp_result.transformation.dot(self.source_to_target_transformation)
+                return
         
-        cam_pose_pcl = pn.PointCloud()
-        cam_pose_pcl.points = pn.Vector3dVector(np.array([[0,0,0]]))  
-        source = copy.deepcopy(pn_cam_pcl)
+        # we fail to align source & target with ICP
+        # GLOBAL REGISTRATION
+        # PREPROCESSING POINT CLOUD
+        source = copy.deepcopy(self.source_pcl)
         
-        result_ransac = pn.registration_ransac_based_on_feature_matching(
+        source_down, source_fpfh = preprocess_point_cloud(source, voxel_size)
+        target_down, target_fpfh = preprocess_point_cloud(target, voxel_size)
+        
+        # GLOBAL REGISTRATION 
+        ransac_result = pn.registration_ransac_based_on_feature_matching(
                 source_down, target_down, source_fpfh, target_fpfh,
                 distance_threshold_ransac,
                 pn.TransformationEstimationPointToPoint(False), 4,
@@ -77,26 +148,66 @@ class localizer(object):
                 ],
                 pn.RANSACConvergenceCriteria(10000000, 10000))
         
-#        if result_ransac.fitness < 0.7:
-#            print 'GLOBAL REGISTRATION----------FAIL'
-#            return np.array([0,0,0])
+        source.transform(ransac_result.transformation)
 
-        print 'GLOBAL REGISTRATION------------OK'
-        print 'ICP REGISTRATION-----------------'
-
-        cam_pose_pcl.transform(result_ransac.transformation)
-        source.transform(result_ransac.transformation)
-
-        result_icp = pn.registration_icp(source, target,
+        icp_result = pn.registration_icp(source, target,
                                          distance_threshold_icp,
                                          np.eye(4),
                                          pn.TransformationEstimationPointToPlane())
         
-#        if result_icp.fitness < 0.8:
-#            print 'ICP REGISTRATION-----------------'
-#            return np.array([0,0,0])
- 
-        print 'ICP REGISTRATION---------------OK'
-        cam_pose_pcl.transform(result_icp.transformation)
-        self.previous_transformation = result_icp.transformation.dot(result_ransac.transformation)
-        return cam_pose_pcl.points[0]
+        self.source_to_target_transformation = \
+            icp_result.transformation.dot(ransac_result.transformation)
+        
+        return
+    
+    def camera_coordinates(self):
+        """
+        Function to retrive the camera coordinates (O, i, j, k) system in the model 
+        coordinates system
+        
+        Return 
+            O (numpy.ndarray) : the origin
+            i (numpy.ndarray) :
+            j (numpy.ndarray) :
+            k (numpy.ndarray) :
+        """
+        if self.source_to_target_transformation.size == 0:
+            print "You need to update source to targt transformation first"
+            return
+        
+        coordinates_system =   pn.PointCloud()
+        coordinates_system.points = pn.Vector3dVector(np.array([[0, 0, 0],
+                                                                [1, 0, 0],
+                                                                [0, 1, 0],
+                                                                [0, 0, 1]]))
+        
+        coordinates_system.transform(self.source_to_target_transformation)
+        
+        return [coordinates_system.points[i] for i in range(4)]
+    
+    
+    def camera_coordinates_history(self):
+        """
+        Function to retrive the previous camera coordinates (O, i, j, k) system in the model 
+        coordinates system
+        
+        Return 
+            camera_coordinates_history (list): 
+        """
+        if self.source_to_target_transformation.size == 0:
+            print "You need to update source to target transformation first"
+            return
+        
+        coordinates_system =   pn.PointCloud()
+        coordinates_system.points = pn.Vector3dVector(np.array([[0, 0, 0],
+                                                                [1, 0, 0],
+                                                                [0, 1, 0],
+                                                                [0, 0, 1]]))
+        
+        coordinates_system.transform(self.source_to_target_transformation)
+        coordinates_history = []
+        coordinates_history.append(np.asarray(coordinates_system.points).copy())
+        for previous_transformation in self.previous_transformations[::-1]:
+            coordinates_system.transform(inv(previous_transformation))
+            coordinates_history.append(np.asarray(coordinates_system.points).copy())
+        return coordinates_history[::-1]
