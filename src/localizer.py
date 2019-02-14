@@ -7,6 +7,8 @@ import numpy as np
 from src.util import mesh2pcl, pn_mesh2pym_mesh , pym_mesh2pn_mesh, fragment_pcl
 import pymesh as pym
 import copy 
+from numpy.linalg import inv
+
 
 target_voxel_size = 1
 voxel_size = 5
@@ -92,7 +94,6 @@ class localizer(object):
             icp_result = icp_registration(self.source_pcl,
                                           camera_pcl,
                                           3)
-#            if icp_result.fitness > 0.95:
             icp_result.transformation = icp_result.transformation
             print icp_result.fitness
             self.previous_transformations.append(icp_result.transformation)
@@ -173,6 +174,7 @@ class localizer(object):
         if self.source_to_target_transformation.size == 0:
             print "You need to update source to targt transformation first"
             return
+        
         coordinates_system =   pn.PointCloud()
         coordinates_system.points = pn.Vector3dVector(np.array([[0, 0, 0],
                                                                 [1, 0, 0],
@@ -192,9 +194,10 @@ class localizer(object):
         Return 
             camera_coordinates_history (list): 
         """
-        if self.source_to_target_transformation.any():
+        if self.source_to_target_transformation.size == 0:
             print "You need to update source to target transformation first"
             return
+        
         coordinates_system =   pn.PointCloud()
         coordinates_system.points = pn.Vector3dVector(np.array([[0, 0, 0],
                                                                 [1, 0, 0],
@@ -202,5 +205,9 @@ class localizer(object):
                                                                 [0, 0, 1]]))
         
         coordinates_system.transform(self.source_to_target_transformation)
-        
-        return [coordinates_system.points[i] for i in range(4)]
+        coordinates_history = []
+        coordinates_history.append(np.asarray(coordinates_system.points).copy())
+        for previous_transformation in self.previous_transformations[::-1]:
+            coordinates_system.transform(inv(previous_transformation))
+            coordinates_history.append(np.asarray(coordinates_system.points).copy())
+        return coordinates_history[::-1]

@@ -111,8 +111,9 @@ for point_cloud in cam_point_clouds:
     
 from src.localizer import localizer
 
-loc = localizer(target_mesh)
+loc = localizer(target_mesh) 
 
+#%% TESTINT LOCALIZER
 import time
 save_transfomation = []
 cam_positions = []
@@ -122,8 +123,9 @@ for cam_pcl in cam_pcl_list:
     start_time = time.time()
     loc.update_source(cam_pcl)
     print start_time - time.time()
-
+# PI
 pn.draw_geometries([loc.source_pcl])
 
 loc.update_source_to_target_transformation()
 loc.camera_coordinates()
+loc.camera_coordinates_history()
