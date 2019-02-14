@@ -60,17 +60,17 @@ class localizer(object):
             model_mesh (open3d.TriangleMesh) :
         """
         self.model_mesh = model_mesh  
-#        pym_target_mesh = pn_mesh2pym_mesh(self.model_mesh)
+        pym_target_mesh = pn_mesh2pym_mesh(self.model_mesh)
         
         # Computing model outer hull 
-#        pym_target_outer_hull = pym.outerhull.compute_outer_hull(pym_target_mesh)
-#        pn_target_outer_hull = pym_mesh2pn_mesh(pym_target_outer_hull)
+        pym_target_outer_hull = pym.outerhull.compute_outer_hull(pym_target_mesh)
+        pn_target_outer_hull = pym_mesh2pn_mesh(pym_target_outer_hull)
         
         # the model_mesh is supposed to be the target (ie the known environement observed 
         # by the camera)
         
         # Converting the target mesh to a target pcl
-#        self.target_pcl = mesh2pcl(pn_target_outer_hull, .5)
+        self.target_pcl = mesh2pcl(pn_target_outer_hull, .5)
         self.previous_transformation = np.array([])
         self.previous_transformations = []
         self.source_to_target_transformation = np.array([])
@@ -98,7 +98,7 @@ class localizer(object):
             self.previous_transformations.append(icp_result.transformation)
             self.source_pcl.transform(icp_result.transformation)
             self.source_pcl = self.source_pcl + camera_pcl
-            self.source_pcl = pn.voxel_down_sample(self.source_pcl, 3)
+            self.source_pcl = pn.voxel_down_sample(self.source_pcl, 2)
             if self.source_to_target_transformation.any():
                 self.source_to_target_transformation = \
                     self.source_to_target_transformation.dot(icp_result.transformation)
@@ -117,7 +117,7 @@ class localizer(object):
         target = pn.voxel_down_sample(self.target_pcl,
                                       target_voxel_size)
         
-        if self.source_to_target_transformation.any():
+        if self.source_to_target_transformation.size > 0:
             # if the global registration have already been done
             source.transform(self.source_to_target_transformation)
             icp_result = pn.registration_icp(source, target,
@@ -154,7 +154,6 @@ class localizer(object):
                                          np.eye(4),
                                          pn.TransformationEstimationPointToPlane())
         
-        
         self.source_to_target_transformation = \
             icp_result.transformation.dot(ransac_result.transformation)
         
@@ -171,8 +170,8 @@ class localizer(object):
             j (numpy.ndarray) :
             k (numpy.ndarray) :
         """
-        if self.source_to_target_transformation.any():
-            print "You need to update source to target transformation first"
+        if self.source_to_target_transformation.size == 0:
+            print "You need to update source to targt transformation first"
             return
         coordinates_system =   pn.PointCloud()
         coordinates_system.points = pn.Vector3dVector(np.array([[0, 0, 0],

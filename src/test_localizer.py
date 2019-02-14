@@ -122,5 +122,8 @@ for cam_pcl in cam_pcl_list:
     start_time = time.time()
     loc.update_source(cam_pcl)
     print start_time - time.time()
-#%%
+
 pn.draw_geometries([loc.source_pcl])
+
+loc.update_source_to_target_transformation()
+loc.camera_coordinates()
