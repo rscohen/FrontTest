@@ -82,7 +82,7 @@ source = pn.PointCloud()
 
 vis = pn.Visualizer()
 vis.create_window()
-for i in range(10):
+for i in range(2):
     for i, point_cloud in enumerate(cam_point_clouds):
         time.sleep(0.42)
         source.points = pn.Vector3dVector(point_cloud)

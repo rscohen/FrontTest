@@ -115,7 +115,8 @@ class camera(object):
                 points = self.pc.calculate(depth_frame)
                 vtx = np.asarray(points.get_vertices(), dtype=np.ndarray)
                 vtx = np.array(list(vtx))
-#                vtx = filter_point_cloud(vtx)
+                vtx = filter_point_cloud(vtx)
+                vtx = vtx * 1000 # conversion m to mm
                 point_cloud = pn.PointCloud() 
                 point_cloud.points = pn.Vector3dVector(vtx)
                 
