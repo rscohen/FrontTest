@@ -2,6 +2,7 @@ from src.camera import camera
 from src.visualization import visualizer_2D, visualizer_3D
 from src.fileIO import read_mesh_file
 import matplotlib.pyplot as plt
+from numpy.linalg import inv
 
 import time
 import numpy as np
@@ -11,7 +12,8 @@ import copy
 
 target_mesh = read_mesh_file('3d_model/InBolt_Proto.stl')
 target_mesh.vertices =  pn.Vector3dVector(np.asarray(target_mesh.vertices)*1000)
-target_mesh.compute_vertex_normals()
+#target_mesh.compute_vertex_normals()
+
 
 #%%
 cam = camera([640, 480], 30)
@@ -77,6 +79,12 @@ np.save("simulation/cam_point_clouds_real", cam_point_clouds)
 np.save("simulation/cam_depth_images_real", cam_depth_images)
 np.save("simulation/cam_color_images_real", cam_color_images)
 
+#%% LOADING
+
+cam_point_clouds = np.load("simulation/cam_point_clouds_real.npy")
+cam_depth_images = np.load("simulation/cam_depth_images_real.npy")
+cam_color_images = np.load("simulation/cam_color_images_real.npy")
+
 
 #%% CONVERTING NUMPY PCL LIST TO open3d PCL LIST
         
@@ -88,6 +96,7 @@ for point_cloud in cam_point_clouds:
     cam_pcl_list.append(cam_pcl)
     
 #%% LOCALIZER
+
 from src.localizer import localizer
 
 loc = localizer(target_mesh) 
@@ -131,8 +140,52 @@ for i, depth_image in enumerate(cam_depth_images):
     fig.axes.get_xaxis().set_visible(False)
     fig.axes.get_yaxis().set_visible(False)
     plt.savefig("simulation/cam_depth_images/%s" %i)
+#%%
+target_mesh.paint_uniform_color([0, 0.651, 0.929])
 
+pn.draw_geometries([target_mesh])
 #%% LOCALIZER ANNIMATION
+    
+scaling = np.eye(4)
+scaling[3,3] = 10
+num_frames = len(cam_point_clouds)
+source = pn.PointCloud()
+source.paint_uniform_color([0, 0.651, 0.929])
+camera_coordinates_history = loc.camera_coordinates_history()
+origines = [x[0] for x in camera_coordinates_history]
+
+camera_representation = pn.LineSet()
+#camera_representation.paint_uniform_color([1, 0.706, 0])
+camera_trace = pn.LineSet()
+camera_trace.points = pn.Vector3dVector(origines)
 
 
+vis = pn.Visualizer()
+vis.create_window()
+vis.add_geometry(target_mesh)
+vis.add_geometry(source)
+transformation = np.eye(4)
 
+for i in range(num_frames)[::-1]:
+    camera_representation.points = pn.Vector3dVector(camera_coordinates_history[num_frames-i-1])
+    camera_representation.lines = pn.Vector2iVector([[0,1],
+                                                     [0,2],
+                                                     [0,3]])
+    camera_representation.transform(scaling)
+    vis.add_geometry(camera_representation)
+    
+    cam_pcl = copy.deepcopy(cam_pcl_list[i])
+    transformation = transformation.dot((loc.previous_transformations[i-1]))
+    cam_pcl.transform(transformation)
+     
+    cam_pcl.transform(loc.source_to_target_transformation)
+    source.points = pn.Vector3dVector(np.asarray(cam_pcl.points))
+    vis.add_geometry(source)
+    vis.update_geometry()
+    vis.poll_events()
+    vis.update_renderer()
+
+    image = vis.capture_screen_float_buffer(False)
+    plt.imsave("simulation/annimation/%s" %i,np.asarray(image))
+vis.destroy_window()
+vis.close()

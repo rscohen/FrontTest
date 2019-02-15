@@ -204,12 +204,12 @@ class localizer(object):
         coordinates_system.points = pn.Vector3dVector(np.array([[0, 0, 0],
                                                                 [1, 0, 0],
                                                                 [0, 1, 0],
-                                                                [0, 0, 1]]))
+                                                                [0, 0, 1]])*10)
         
         coordinates_history = []
         coordinates_history.append(copy.deepcopy(coordinates_system))
-        for previous_transformation in self.previous_transformations[::-1]:
-            coordinates_system.transform((previous_transformation))
+        for previous_transformation in self.previous_transformations:
+            coordinates_system.transform(previous_transformation)
             coordinates_history.append(copy.deepcopy(coordinates_system))
         
         coordinates_history1 = []
@@ -217,4 +217,4 @@ class localizer(object):
             coordinates_system.transform(self.source_to_target_transformation)
             coordinates_history1.append(np.asarray(coordinates_system.points))
             
-        return coordinates_history1[::-1]
+        return coordinates_history1
