@@ -1,6 +1,8 @@
 from src.camera import camera
 from src.visualization import visualizer_2D, visualizer_3D
 from src.fileIO import read_mesh_file
+import matplotlib.pyplot as plt
+
 import time
 import numpy as np
 import json
@@ -109,3 +111,28 @@ camera_trace.points = pn.Vector3dVector(origines)
 camera_trace.lines = pn.Vector2iVector([[i,i+1] for i in range(len(origines)-1)])
 
 pn.draw_geometries([target_mesh, source, camera_trace])
+
+
+
+#%% SAVING COLOR IMAGE
+
+for i, color_image in enumerate(cam_color_images):
+    plt.figure(1)
+    fig = plt.imshow(color_image)
+    fig.axes.get_xaxis().set_visible(False)
+    fig.axes.get_yaxis().set_visible(False)
+    plt.savefig("simulation/cam_color_images/%s" %i)
+
+#%% SAVING DEPTH IMAGE
+
+for i, depth_image in enumerate(cam_depth_images):
+    plt.figure(1)
+    fig =plt.imshow(depth_image*10)
+    fig.axes.get_xaxis().set_visible(False)
+    fig.axes.get_yaxis().set_visible(False)
+    plt.savefig("simulation/cam_depth_images/%s" %i)
+
+#%% LOCALIZER ANNIMATION
+
+
+
