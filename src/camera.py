@@ -102,23 +102,27 @@ class camera(object):
             frame (frame) : The last available frame
         """
         while True:
-            frames = self.pipeline.wait_for_frames()
-            depth_frame = frames.get_depth_frame()
-            color_frame = frames.get_color_frame()
-            if not depth_frame or not color_frame:
+            try:
+                frames = self.pipeline.wait_for_frames()
+                depth_frame = frames.get_depth_frame()
+                color_frame = frames.get_color_frame()
+                if not depth_frame or not color_frame:
+                    continue
+                
+                depth_image = np.asanyarray(depth_frame.get_data())
+                color_image = np.asanyarray(color_frame.get_data())
+                
+                points = self.pc.calculate(depth_frame)
+                vtx = np.asarray(points.get_vertices(), dtype=np.ndarray)
+                vtx = np.array(list(vtx))
+                vtx = filter_point_cloud(vtx)
+                vtx = vtx * 1000 # conversion m to mm
+                point_cloud = pn.PointCloud() 
+                point_cloud.points = pn.Vector3dVector(vtx)
+                
+                return frame(color_image, depth_image, point_cloud)
+            except:
                 continue
-            
-            depth_image = np.asanyarray(depth_frame.get_data())
-            color_image = np.asanyarray(color_frame.get_data())
-            
-            points = self.pc.calculate(depth_frame)
-            vtx = np.asarray(points.get_vertices(), dtype=np.ndarray)
-            vtx = np.array(list(vtx))
-            vtx = filter_point_cloud(vtx)
-            point_cloud = pn.PointCloud() 
-            point_cloud.points = pn.Vector3dVector(vtx)
-            
-            return frame(color_image, depth_image, point_cloud)
         
     def stop_recording(self):
         """

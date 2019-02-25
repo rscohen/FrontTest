@@ -14,6 +14,7 @@ import pickle
 import trimesh as tr
 import time
 #%%
+
 target_mesh = read_mesh_file('3d_model/Motor.stl')
 target_mesh.compute_vertex_normals()
 
@@ -24,7 +25,9 @@ tr_target_mesh = mesh_1 + mesh_2
 target_mesh = tr_mesh2pn_mesh(tr_target_mesh)
 
 target_mesh.compute_vertex_normals()
+
 #%% camera circular trajectory settings
+
 V = 2 # m/s
 fps = 5
 simulation_time = 10 # s
@@ -35,6 +38,7 @@ radius = 800 # mmm
 dist = V * simulation_time * 100 # mm
 nb_of_frames = fps * simulation_time
 rotation_angle =  dist / (2 * np.pi * radius)
+
 #%% CAMERA SIMULATION
 
 save_sim = []
@@ -78,9 +82,9 @@ source = pn.PointCloud()
 
 vis = pn.Visualizer()
 vis.create_window()
-for i in range(10):
+for i in range(2):
     for i, point_cloud in enumerate(cam_point_clouds):
-        time.sleep(1/fps)
+        time.sleep(0.42)
         source.points = pn.Vector3dVector(point_cloud)
         source.paint_uniform_color([1, 0.706, 0])
         vis.add_geometry(source)
@@ -96,7 +100,7 @@ for i in range(50):
     for i, depth_image in enumerate(cam_depth_images):
         plt.figure(1); plt.clf()
         plt.imshow(depth_image)
-        plt.pause(1/fps)
+        plt.pause(0.42)
 
 #%% CONVERTING NUMPY PCL LIST TO open3d PCL LIST
         
@@ -111,9 +115,10 @@ for point_cloud in cam_point_clouds:
     
 from src.localizer import localizer
 
-loc = localizer(target_mesh) 
+loc = localizer() 
 
 #%% TESTINT LOCALIZER
+
 import time
 save_transfomation = []
 cam_positions = []
@@ -123,9 +128,9 @@ for cam_pcl in cam_pcl_list:
     start_time = time.time()
     loc.update_source(cam_pcl)
     print start_time - time.time()
-# PI
-pn.draw_geometries([loc.source_pcl])
 
+pn.draw_geometries([loc.source_pcl])
+#%%
 loc.update_source_to_target_transformation()
 loc.camera_coordinates()
 loc.camera_coordinates_history()

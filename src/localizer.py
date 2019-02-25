@@ -54,28 +54,29 @@ class localizer(object):
         previous_transformations (numpy.ndarray) :
     """
     
-    def __init__(self, model_mesh):
+    def __init__(self, model_mesh=None):
         """ 
         Constructor for localizer class. 
   
         Parameters: 
             model_mesh (open3d.TriangleMesh) :
         """
-        self.model_mesh = model_mesh  
-        pym_target_mesh = pn_mesh2pym_mesh(self.model_mesh)
-        
-        # Computing model outer hull 
-        pym_target_outer_hull = pym.outerhull.compute_outer_hull(pym_target_mesh)
-        pn_target_outer_hull = pym_mesh2pn_mesh(pym_target_outer_hull)
-        
-        # the model_mesh is supposed to be the target (ie the known environement observed 
-        # by the camera)
-        
-        # Converting the target mesh to a target pcl
-        self.target_pcl = mesh2pcl(pn_target_outer_hull, .5)
+        if model_mesh != None:
+            self.model_mesh = model_mesh  
+            pym_target_mesh = pn_mesh2pym_mesh(self.model_mesh)
+            
+            # Computing model outer hull 
+            pym_target_outer_hull = pym.outerhull.compute_outer_hull(pym_target_mesh)
+            pn_target_outer_hull = pym_mesh2pn_mesh(pym_target_outer_hull)
+            
+            # the model_mesh is supposed to be the target (ie the known environement observed 
+            # by the camera)
+            
+            # Converting the target mesh to a target pcl
+            self.target_pcl = mesh2pcl(pn_target_outer_hull, .5)
         self.previous_transformation = np.array([])
         self.previous_transformations = []
-        self.source_to_target_transformation = np.array([])
+        self.source_to_target_transformation = np.eye(4)
         self.source_pcl = pn.PointCloud()
     
     def update_source(self, camera_point_cloud):
@@ -86,7 +87,8 @@ class localizer(object):
             camera_point_cloud (open3d.PointCloud) : point cloud from the camera frame 
         """
         camera_pcl = copy.deepcopy(camera_point_cloud)
-        
+        camera_pcl = pn.voxel_down_sample(camera_pcl, 1)
+        print len(np.asarray(camera_pcl.points))
         if self.source_pcl.is_empty():
             self.source_pcl = self.source_pcl + camera_pcl
             return
@@ -95,11 +97,11 @@ class localizer(object):
                                           camera_pcl,
                                           3)
             icp_result.transformation = icp_result.transformation
-            print icp_result.fitness
             self.previous_transformations.append(icp_result.transformation)
             self.source_pcl.transform(icp_result.transformation)
             self.source_pcl = self.source_pcl + camera_pcl
-            self.source_pcl = pn.voxel_down_sample(self.source_pcl, 2)
+            self.source_pcl = pn.voxel_down_sample(self.source_pcl, 1)
+#            pn.draw_geometries([self.source_pcl])
             if self.source_to_target_transformation.any():
                 self.source_to_target_transformation = \
                     self.source_to_target_transformation.dot(icp_result.transformation)
@@ -202,12 +204,17 @@ class localizer(object):
         coordinates_system.points = pn.Vector3dVector(np.array([[0, 0, 0],
                                                                 [1, 0, 0],
                                                                 [0, 1, 0],
-                                                                [0, 0, 1]]))
+                                                                [0, 0, 1]])*10)
         
-        coordinates_system.transform(self.source_to_target_transformation)
         coordinates_history = []
-        coordinates_history.append(np.asarray(coordinates_system.points).copy())
-        for previous_transformation in self.previous_transformations[::-1]:
-            coordinates_system.transform(inv(previous_transformation))
-            coordinates_history.append(np.asarray(coordinates_system.points).copy())
-        return coordinates_history[::-1]
+        coordinates_history.append(copy.deepcopy(coordinates_system))
+        for previous_transformation in self.previous_transformations:
+            coordinates_system.transform(previous_transformation)
+            coordinates_history.append(copy.deepcopy(coordinates_system))
+        
+        coordinates_history1 = []
+        for coordinates_system in coordinates_history:
+            coordinates_system.transform(self.source_to_target_transformation)
+            coordinates_history1.append(np.asarray(coordinates_system.points))
+            
+        return coordinates_history1
